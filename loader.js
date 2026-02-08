@@ -1,7 +1,7 @@
 // ----- CONFIG -----
 // Replace with your actual GitHub Pages URL once deployed.
 // e.g. https://yourusername.github.io/meet-beat/payload.js
-const REMOTE_SCRIPT_URL = 'https://MrRob100.github.io/meet-beat/remote/payload.js';
+const REMOTE_SCRIPT_URL = 'https://MrRob100.github.io/call-rhythm/remote/payload.js';
 // -------------------
 
 const script = document.createElement('script');
