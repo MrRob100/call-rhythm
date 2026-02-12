@@ -1,13 +1,64 @@
-const slider = document.getElementById('slider');
-const val = document.getElementById('val');
+const trackSelect = document.getElementById('track-select');
+const playBtn = document.getElementById('play-btn');
 
-chrome.storage.local.get({ reverbAmount: 50 }, (data) => {
-  slider.value = data.reverbAmount;
-  val.textContent = data.reverbAmount;
+let tracks = [];
+let playing = false;
+
+// --- Track selection ---
+fetch('tracks/index.json')
+  .then((r) => r.json())
+  .then((list) => {
+    tracks = list;
+    tracks.forEach((t, i) => {
+      const opt = document.createElement('option');
+      opt.value = i;
+      opt.textContent = t.name;
+      trackSelect.appendChild(opt);
+    });
+
+    // Restore saved selection and play state
+    chrome.storage.local.get({ selectedTrack: 0, beatPlaying: false }, (data) => {
+      trackSelect.value = data.selectedTrack;
+      playing = data.beatPlaying;
+      updatePlayBtn();
+    });
+  });
+
+trackSelect.addEventListener('change', () => {
+  chrome.storage.local.set({ selectedTrack: Number(trackSelect.value) });
+
+  // If currently playing, switch to the new track
+  if (playing) {
+    sendToTab('playTrack');
+  }
 });
 
-slider.addEventListener('input', () => {
-  const v = Number(slider.value);
-  val.textContent = v;
-  chrome.storage.local.set({ reverbAmount: v });
+playBtn.addEventListener('click', () => {
+  playing = !playing;
+  updatePlayBtn();
+  chrome.storage.local.set({ beatPlaying: playing });
+
+  if (playing) {
+    sendToTab('playTrack');
+  } else {
+    sendToTab('stopTrack');
+  }
 });
+
+function updatePlayBtn() {
+  playBtn.textContent = playing ? 'Stop' : 'Play';
+}
+
+function sendToTab(action) {
+  chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+    if (!tabs[0]) return;
+    const track = tracks[trackSelect.value];
+    if (!track && action === 'playTrack') return;
+
+    const msg = action === 'playTrack'
+      ? { action, file: track.file, bpm: track.bpm }
+      : { action };
+
+    chrome.tabs.sendMessage(tabs[0].id, msg);
+  });
+}

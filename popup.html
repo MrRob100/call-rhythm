@@ -16,15 +16,33 @@
       margin-bottom: 8px;
       font-weight: 500;
     }
-    input[type="range"] {
+    select {
       width: 100%;
-      accent-color: #7b61ff;
+      padding: 4px;
+      margin-bottom: 8px;
+      background: #2a2a2a;
+      color: #e0e0e0;
+      border: 1px solid #444;
+      border-radius: 4px;
+      font-size: 13px;
     }
+    button {
+      width: 100%;
+      padding: 6px;
+      background: #7b61ff;
+      color: #fff;
+      border: none;
+      border-radius: 4px;
+      font-size: 13px;
+      cursor: pointer;
+    }
+    button:hover { background: #6a50e0; }
   </style>
 </head>
 <body>
-  <label>Reverb: <span id="val">50</span>%</label>
-  <input type="range" id="slider" min="0" max="100" value="50">
+  <label>Instrumental</label>
+  <select id="track-select"></select>
+  <button id="play-btn">Play</button>
   <script src="popup.js"></script>
 </body>
 </html>
