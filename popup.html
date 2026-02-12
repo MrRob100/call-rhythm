@@ -37,12 +37,40 @@
       cursor: pointer;
     }
     button:hover { background: #6a50e0; }
+
+    #beat-section {
+      margin-top: 12px;
+      display: none;
+    }
+    #bpm-display {
+      text-align: center;
+      font-size: 11px;
+      color: #888;
+      margin-bottom: 6px;
+    }
+    #beat-bar-track {
+      width: 100%;
+      height: 6px;
+      background: #2a2a2a;
+      border-radius: 3px;
+      overflow: hidden;
+    }
+    #beat-bar-fill {
+      height: 100%;
+      width: 0%;
+      background: #7b61ff;
+      border-radius: 3px;
+    }
   </style>
 </head>
 <body>
   <label>Instrumental</label>
   <select id="track-select"></select>
   <button id="play-btn">Play</button>
+  <div id="beat-section">
+    <div id="bpm-display"></div>
+    <div id="beat-bar-track"><div id="beat-bar-fill"></div></div>
+  </div>
   <script src="popup.js"></script>
 </body>
 </html>
