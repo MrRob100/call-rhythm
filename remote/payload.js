@@ -14,6 +14,11 @@
   let beatLogCount = 0;
   let beatLogTimer = null;
 
+  // Call audio capture state
+  let workletReady = false;
+  const processedElements = new WeakSet();
+  const capturedMedia = []; // { source, vocoder, gain } per element
+
   function getBeatInfo() {
     if (beatStartTime === null || !audioCtx || !currentBpm) return null;
     const elapsed = audioCtx.currentTime - beatStartTime;
@@ -106,12 +111,100 @@
     console.log(TAG, 'Beat playing:', file, '@', bpm, 'bpm');
   }
 
+  // --- Call audio capture ---
+  async function ensureWorklet() {
+    if (workletReady) return;
+    const ctx = getAudioContext();
+    const url = chrome.runtime.getURL('worklet/phase-vocoder-processor.js');
+    await ctx.audioWorklet.addModule(url);
+    workletReady = true;
+    console.log(TAG, 'WSOLA worklet loaded');
+  }
+
+  async function captureCallAudio(el) {
+    if (processedElements.has(el)) return;
+    processedElements.add(el);
+
+    try {
+      await ensureWorklet();
+      const ctx = getAudioContext();
+
+      const source = ctx.createMediaElementSource(el);
+      const vocoder = new AudioWorkletNode(ctx, 'phase-vocoder-processor');
+      const gain = ctx.createGain();
+
+      // Restore saved values
+      const data = await new Promise(resolve =>
+        chrome.storage.local.get({ stretchRatio: 1.0, callVolume: 1.0 }, resolve)
+      );
+      vocoder.parameters.get('stretchRatio').value = data.stretchRatio;
+      gain.gain.value = data.callVolume;
+
+      source.connect(vocoder);
+      vocoder.connect(gain);
+      gain.connect(ctx.destination);
+
+      capturedMedia.push({ source, vocoder, gain });
+      console.log(TAG, 'Call audio captured from', el.tagName);
+    } catch (err) {
+      console.warn(TAG, 'Could not capture', el.tagName, ':', err.message);
+    }
+  }
+
+  function scanForMedia() {
+    const elements = document.querySelectorAll('audio, video');
+    elements.forEach(el => captureCallAudio(el));
+  }
+
+  // Scan existing elements
+  scanForMedia();
+
+  // Watch for dynamically added media elements
+  const mediaObserver = new MutationObserver((mutations) => {
+    for (const mutation of mutations) {
+      for (const node of mutation.addedNodes) {
+        if (node.nodeType !== Node.ELEMENT_NODE) continue;
+        if (node.tagName === 'AUDIO' || node.tagName === 'VIDEO') {
+          captureCallAudio(node);
+        }
+        // Also check children of added subtrees
+        if (node.querySelectorAll) {
+          node.querySelectorAll('audio, video').forEach(el => captureCallAudio(el));
+        }
+      }
+    }
+  });
+  mediaObserver.observe(document.documentElement, { childList: true, subtree: true });
+
+  // --- Message handler ---
   chrome.runtime.onMessage.addListener((msg) => {
     if (msg.action === 'playTrack') {
       playTrack(msg.file, msg.bpm);
     } else if (msg.action === 'stopTrack') {
       stopBeat();
       console.log(TAG, 'Beat stopped');
+    } else if (msg.action === 'setStretchRatio') {
+      capturedMedia.forEach(m => {
+        m.vocoder.parameters.get('stretchRatio').value = msg.value;
+      });
+    } else if (msg.action === 'setCallVolume') {
+      capturedMedia.forEach(m => {
+        m.gain.gain.value = msg.value;
+      });
+    }
+  });
+
+  // Sync stretch/volume when values change in storage (e.g. popup reopened)
+  chrome.storage.onChanged.addListener((changes) => {
+    if (changes.stretchRatio && capturedMedia.length) {
+      capturedMedia.forEach(m => {
+        m.vocoder.parameters.get('stretchRatio').value = changes.stretchRatio.newValue;
+      });
+    }
+    if (changes.callVolume && capturedMedia.length) {
+      capturedMedia.forEach(m => {
+        m.gain.gain.value = changes.callVolume.newValue;
+      });
     }
   });
 
