@@ -2,12 +2,40 @@
   const TAG = '[Call Rhythm]';
   const REVERB_DURATION = 2;   // seconds
   const DECAY_RATE = 3;
-  const DRY_GAIN = 0.6;
-  const WET_GAIN = 0.4;
 
   let audioCtx = null;
   let convolver = null;
+  let currentWet = 0.4;
+  let currentDry = 0.6;
+  const gainPairs = []; // { dry: GainNode, wet: GainNode }
   const processed = new WeakSet();
+
+  function gainsFromAmount(amount) {
+    const wet = amount / 100 * 0.8;
+    return { wet, dry: 1.0 - wet };
+  }
+
+  // Load saved reverb amount
+  chrome.storage.local.get({ reverbAmount: 50 }, (data) => {
+    const g = gainsFromAmount(data.reverbAmount);
+    currentWet = g.wet;
+    currentDry = g.dry;
+    console.log(TAG, 'Reverb amount loaded:', data.reverbAmount);
+  });
+
+  // Live update when slider changes
+  chrome.storage.onChanged.addListener((changes) => {
+    if (changes.reverbAmount) {
+      const g = gainsFromAmount(changes.reverbAmount.newValue);
+      currentWet = g.wet;
+      currentDry = g.dry;
+      for (const pair of gainPairs) {
+        pair.dry.gain.value = currentDry;
+        pair.wet.gain.value = currentWet;
+      }
+      console.log(TAG, 'Reverb updated live:', changes.reverbAmount.newValue);
+    }
+  });
 
   function getAudioContext() {
     if (!audioCtx) {
@@ -49,10 +77,12 @@
     }
 
     const dry = ctx.createGain();
-    dry.gain.value = DRY_GAIN;
+    dry.gain.value = currentDry;
 
     const wet = ctx.createGain();
-    wet.gain.value = WET_GAIN;
+    wet.gain.value = currentWet;
+
+    gainPairs.push({ dry, wet });
 
     source.connect(dry);
     dry.connect(ctx.destination);

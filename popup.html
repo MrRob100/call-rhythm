@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <style>
+    body {
+      width: 220px;
+      padding: 16px;
+      margin: 0;
+      background: #1e1e1e;
+      color: #e0e0e0;
+      font-family: -apple-system, sans-serif;
+      font-size: 13px;
+    }
+    label {
+      display: block;
+      margin-bottom: 8px;
+      font-weight: 500;
+    }
+    input[type="range"] {
+      width: 100%;
+      accent-color: #7b61ff;
+    }
+  </style>
+</head>
+<body>
+  <label>Reverb: <span id="val">50</span>%</label>
+  <input type="range" id="slider" min="0" max="100" value="50">
+  <script src="popup.js"></script>
+</body>
+</html>

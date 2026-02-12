@@ -5,6 +5,9 @@
   "description": "Auto-updating Chrome extension via GitHub.",
   "permissions": ["alarms", "storage"],
   "host_permissions": ["https://mrrob100.github.io/*"],
+  "action": {
+    "default_popup": "popup.html"
+  },
   "background": {
     "service_worker": "background.js"
   },
