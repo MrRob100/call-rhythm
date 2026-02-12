@@ -3,6 +3,17 @@
   "name": "Meet Beat",
   "version": "1.0",
   "description": "Loads and runs a remote script from GitHub Pages.",
+  "permissions": ["declarativeNetRequest"],
+  "host_permissions": ["<all_urls>"],
+  "declarative_net_request": {
+    "rule_resources": [
+      {
+        "id": "ruleset_csp",
+        "enabled": true,
+        "path": "rules.json"
+      }
+    ]
+  },
   "content_scripts": [
     {
       "matches": ["<all_urls>"],
