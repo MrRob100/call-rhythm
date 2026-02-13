@@ -24,30 +24,41 @@ Fetched MP3 → AudioBufferSourceNode → beatGain(0.3) → destination
 
 ---
 
-## Phase 2: Beat Clock & BPM Detection
+## Phase 2: Beat Clock & BPM Detection ✅
 
 Establish a precise beat clock from the instrumental's known BPM so we know exactly where each beat falls in real time. This is the foundation for syncing time-stretch to the beat grid.
 
-**Key tasks:**
-- Track current beat position from `audioCtx.currentTime` + `beatSource.start()` time
-- Expose a `getBeatPhase()` function (0.0–1.0 within each beat)
-- Optional: tap-tempo or manual BPM nudge in popup for fine-tuning
+**What was built:**
+- `getBeatInfo()` returns `{ phase, beat, bpm }` from `audioCtx.currentTime` + `beatSource.start()` time
+- Wall-clock anchor stored in `chrome.storage.local` for popup animation
+- Visual pulse indicator in popup (beat bar with rise/decay animation)
+- First 8 beats logged to console for verification
 
 ---
 
-## Phase 3: Call Audio Capture & Time-Stretching
+## Phase 3: Call Audio Capture & Time-Stretching ✅
 
-Capture the call's `<audio>`/`<video>` element and time-stretch it in real time to match the instrumental's BPM.
+Capture the call's `<audio>`/`<video>` element and time-stretch it in real time using a WSOLA AudioWorklet.
 
-**Key tasks:**
-- Capture tab media element via `createMediaElementSource`
-- Implement real-time time-stretching (phase vocoder or playbackRate approach)
-- Sync stretched audio to the beat clock from Phase 2
-- Keep instrumental and call audio as separate graph branches merging at destination
+**Audio graph:**
+```
+Call audio (<audio>/<video> element)
+  -> createMediaElementSource
+  -> AudioWorkletNode('phase-vocoder-processor')  [stretchRatio param]
+  -> callGain (default 1.0)
+  -> ctx.destination
+```
 
-**Open questions:**
-- Phase vocoder in Web Audio (OLA/WSOLA in AudioWorklet) vs simple `playbackRate` adjustment?
-- How to determine the "natural BPM" of speech to know the stretch ratio?
+**What was built:**
+- `worklet/phase-vocoder-processor.js` — WSOLA AudioWorklet (FRAME_SIZE=2048, HOP_ANALYSIS=512, MAX_SEEK=128, cross-correlation splice search, Hann windowing, independent stereo state)
+- `payload.js` — `ensureWorklet()`, `captureCallAudio(el)`, `scanForMedia()`, MutationObserver for dynamic `<audio>`/`<video>` elements, `setStretchRatio`/`setCallVolume` message handlers, `chrome.storage.onChanged` sync
+- Popup sliders for Time Stretch (0.5x–2.0x) and Call Volume (0–100%), persisted in storage
+- `manifest.json` — `web_accessible_resources` for worklet, version bumped to 1.2
+
+**Known limitations:**
+- WebRTC-only platforms (Google Meet, Zoom) don't create `<audio>` elements — future: `chrome.tabCapture.capture()` fallback
+- CORS-tainted media outputs silence (logged as warning)
+- Multiple media elements supported via `capturedMedia` array
 
 ---
 
