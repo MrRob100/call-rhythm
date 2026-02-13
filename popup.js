@@ -3,8 +3,6 @@ const playBtn = document.getElementById('play-btn');
 const beatSection = document.getElementById('beat-section');
 const bpmDisplay = document.getElementById('bpm-display');
 const beatBarFill = document.getElementById('beat-bar-fill');
-const stretchSlider = document.getElementById('stretch-slider');
-const stretchDisplay = document.getElementById('stretch-display');
 const callVolSlider = document.getElementById('callvol-slider');
 const callVolDisplay = document.getElementById('callvol-display');
 
@@ -28,7 +26,7 @@ fetch('tracks/index.json')
     // Restore saved selection and play state
     chrome.storage.local.get(
       { selectedTrack: 0, beatPlaying: false, beatStartWallClock: null, beatBpm: null,
-        stretchRatio: 1.0, callVolume: 1.0 },
+        callVolume: 1.0 },
       (data) => {
         trackSelect.value = data.selectedTrack;
         playing = data.beatPlaying;
@@ -36,9 +34,6 @@ fetch('tracks/index.json')
         if (playing && data.beatStartWallClock && data.beatBpm) {
           startBeatAnimation(data.beatStartWallClock, data.beatBpm);
         }
-        // Restore slider positions
-        stretchSlider.value = data.stretchRatio;
-        stretchDisplay.textContent = parseFloat(data.stretchRatio).toFixed(2) + 'x';
         callVolSlider.value = data.callVolume;
         callVolDisplay.textContent = Math.round(data.callVolume * 100) + '%';
       }
@@ -130,13 +125,6 @@ function sendControlToTab(action, value) {
     chrome.tabs.sendMessage(tabs[0].id, { action, value });
   });
 }
-
-stretchSlider.addEventListener('input', () => {
-  const val = parseFloat(stretchSlider.value);
-  stretchDisplay.textContent = val.toFixed(2) + 'x';
-  chrome.storage.local.set({ stretchRatio: val });
-  sendControlToTab('setStretchRatio', val);
-});
 
 callVolSlider.addEventListener('input', () => {
   const val = parseFloat(callVolSlider.value);

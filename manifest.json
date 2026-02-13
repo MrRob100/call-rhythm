@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Call Rhythm",
-  "version": "1.2",
+  "version": "1.3",
   "description": "Auto-updating Chrome extension via GitHub.",
   "permissions": ["alarms", "storage"],
   "host_permissions": ["https://mrrob100.github.io/*"],
@@ -19,7 +19,7 @@
     }
   ],
   "web_accessible_resources": [{
-    "resources": ["worklet/phase-vocoder-processor.js"],
+    "resources": ["worklet/beat-sync-processor.js"],
     "matches": ["<all_urls>"]
   }]
 }

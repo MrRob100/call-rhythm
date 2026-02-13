@@ -36,24 +36,30 @@ Establish a precise beat clock from the instrumental's known BPM so we know exac
 
 ---
 
-## Phase 3: Call Audio Capture & Time-Stretching ✅
+## Phase 3: Beat-Aware Silence Padding ✅
 
-Capture the call's `<audio>`/`<video>` element and time-stretch it in real time using a WSOLA AudioWorklet.
+Capture the call's `<audio>`/`<video>` element and automatically align speech to beat boundaries by extending silences. Replaces the previous WSOLA time-stretcher which was too heavy (~32k ops/block) and required a manual slider.
 
 **Audio graph:**
 ```
 Call audio (<audio>/<video> element)
   -> createMediaElementSource
-  -> AudioWorkletNode('phase-vocoder-processor')  [stretchRatio param]
+  -> AudioWorkletNode('beat-sync-processor')
   -> callGain (default 1.0)
   -> ctx.destination
 ```
 
 **What was built:**
-- `worklet/phase-vocoder-processor.js` — WSOLA AudioWorklet (FRAME_SIZE=2048, HOP_ANALYSIS=512, MAX_SEEK=128, cross-correlation splice search, Hann windowing, independent stereo state)
-- `payload.js` — `ensureWorklet()`, `captureCallAudio(el)`, `scanForMedia()`, MutationObserver for dynamic `<audio>`/`<video>` elements, `setStretchRatio`/`setCallVolume` message handlers, `chrome.storage.onChanged` sync
-- Popup sliders for Time Stretch (0.5x–2.0x) and Call Volume (0–100%), persisted in storage
-- `manifest.json` — `web_accessible_resources` for worklet, version bumped to 1.2
+- `worklet/beat-sync-processor.js` — Lightweight AudioWorklet (~500 ops/block) with 3-state machine (PASSTHROUGH/PADDING/CATCHING_UP), ring buffer (4s), RMS silence detection (threshold -40dB, hysteresis), beat phase calculation via MessagePort
+- `payload.js` — `ensureWorklet()` loads beat-sync-processor, `captureCallAudio(el)` wires up syncNode, beat timing propagated to worklets on play/stop, `scanForMedia()`, MutationObserver for dynamic elements, `setCallVolume` handler
+- Popup with Call Volume slider (0–100%), Time Stretch slider removed (sync is automatic)
+- `manifest.json` — `web_accessible_resources` for new worklet, version 1.3
+
+**Algorithm:**
+- In confirmed silence, if next beat is <0.5s away → pad with zeros until beat boundary
+- If accumulated drift >= 2s → catch up by skipping 256 extra samples/block during silence
+- Speech detection exits padding/catch-up immediately (2-block hysteresis)
+- No beat active → pure passthrough, zero overhead
 
 **Known limitations:**
 - WebRTC-only platforms (Google Meet, Zoom) don't create `<audio>` elements — future: `chrome.tabCapture.capture()` fallback

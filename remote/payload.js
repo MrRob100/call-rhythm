@@ -17,7 +17,7 @@
   // Call audio capture state
   let workletReady = false;
   const processedElements = new WeakSet();
-  const capturedMedia = []; // { source, vocoder, gain } per element
+  const capturedMedia = []; // { source, syncNode, gain } per element
 
   function getBeatInfo() {
     if (beatStartTime === null || !audioCtx || !currentBpm) return null;
@@ -63,6 +63,11 @@
     beatStartTime = null;
     clearInterval(beatLogTimer);
     chrome.storage.local.remove(['beatStartWallClock', 'beatBpm']);
+
+    // Tell all worklets to stop syncing
+    capturedMedia.forEach(m => {
+      m.syncNode.port.postMessage({ type: 'beatStop' });
+    });
   }
 
   async function playTrack(file, bpm) {
@@ -97,6 +102,15 @@
       beatBpm: bpm
     });
 
+    // Send beat timing to all active worklets
+    capturedMedia.forEach(m => {
+      m.syncNode.port.postMessage({
+        type: 'beatTiming',
+        bpm: currentBpm,
+        beatStartTime
+      });
+    });
+
     // Log first 8 beats to console for verification
     beatLogCount = 0;
     clearInterval(beatLogTimer);
@@ -115,10 +129,10 @@
   async function ensureWorklet() {
     if (workletReady) return;
     const ctx = getAudioContext();
-    const url = chrome.runtime.getURL('worklet/phase-vocoder-processor.js');
+    const url = chrome.runtime.getURL('worklet/beat-sync-processor.js');
     await ctx.audioWorklet.addModule(url);
     workletReady = true;
-    console.log(TAG, 'WSOLA worklet loaded');
+    console.log(TAG, 'Beat-sync worklet loaded');
   }
 
   async function captureCallAudio(el) {
@@ -130,21 +144,29 @@
       const ctx = getAudioContext();
 
       const source = ctx.createMediaElementSource(el);
-      const vocoder = new AudioWorkletNode(ctx, 'phase-vocoder-processor');
+      const syncNode = new AudioWorkletNode(ctx, 'beat-sync-processor');
       const gain = ctx.createGain();
 
-      // Restore saved values
+      // Restore saved call volume
       const data = await new Promise(resolve =>
-        chrome.storage.local.get({ stretchRatio: 1.0, callVolume: 1.0 }, resolve)
+        chrome.storage.local.get({ callVolume: 1.0 }, resolve)
       );
-      vocoder.parameters.get('stretchRatio').value = data.stretchRatio;
       gain.gain.value = data.callVolume;
 
-      source.connect(vocoder);
-      vocoder.connect(gain);
+      source.connect(syncNode);
+      syncNode.connect(gain);
       gain.connect(ctx.destination);
 
-      capturedMedia.push({ source, vocoder, gain });
+      // If beat is already playing, send timing immediately
+      if (beatStartTime !== null && currentBpm) {
+        syncNode.port.postMessage({
+          type: 'beatTiming',
+          bpm: currentBpm,
+          beatStartTime
+        });
+      }
+
+      capturedMedia.push({ source, syncNode, gain });
       console.log(TAG, 'Call audio captured from', el.tagName);
     } catch (err) {
       console.warn(TAG, 'Could not capture', el.tagName, ':', err.message);
@@ -183,10 +205,6 @@
     } else if (msg.action === 'stopTrack') {
       stopBeat();
       console.log(TAG, 'Beat stopped');
-    } else if (msg.action === 'setStretchRatio') {
-      capturedMedia.forEach(m => {
-        m.vocoder.parameters.get('stretchRatio').value = msg.value;
-      });
     } else if (msg.action === 'setCallVolume') {
       capturedMedia.forEach(m => {
         m.gain.gain.value = msg.value;
@@ -194,13 +212,8 @@
     }
   });
 
-  // Sync stretch/volume when values change in storage (e.g. popup reopened)
+  // Sync volume when value changes in storage (e.g. popup reopened)
   chrome.storage.onChanged.addListener((changes) => {
-    if (changes.stretchRatio && capturedMedia.length) {
-      capturedMedia.forEach(m => {
-        m.vocoder.parameters.get('stretchRatio').value = changes.stretchRatio.newValue;
-      });
-    }
     if (changes.callVolume && capturedMedia.length) {
       capturedMedia.forEach(m => {
         m.gain.gain.value = changes.callVolume.newValue;
